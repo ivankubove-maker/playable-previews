@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Playable preview</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--line:#262a33;--text:#e8eaef;--muted:#8b92a1;--accent:#4f8cff}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+h1{font-size:15px;font-weight:600;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
+select,button,.btn{appearance:none;-webkit-appearance:none;background:#1f232c;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap}
+select:hover,button:hover,.btn:hover{border-color:#3d4452}
+button:disabled{opacity:.4;cursor:default}
+.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+#size{color:var(--muted);font-size:12px;min-width:90px;text-align:right}
+main{flex:1;position:relative;min-height:0}
+#stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#device{position:relative;flex:none;border-radius:28px;background:#000;box-shadow:0 0 0 10px #22262f,0 20px 60px rgba(0,0,0,.5);overflow:hidden;transform-origin:center center}
+#device.fill{border-radius:0;box-shadow:none}
+#frame{display:block;border:0;width:100%;height:100%;background:#000}
+.msg{max-width:600px;margin:60px auto;padding:0 20px;color:var(--muted)}
+.msg h2{color:var(--text);font-size:18px;margin-bottom:8px}
+code{background:#1f232c;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px;color:var(--text)}
+#list{position:absolute;inset:0;overflow:auto;padding:24px 16px}
+.grid{max-width:900px;margin:0 auto}
+.row{display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px solid var(--line);background:var(--panel);border-radius:8px;margin-bottom:8px}
+.row .name{flex:1;font-weight:500;word-break:break-all}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#2b313d;color:#fff;padding:8px 14px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+@media (max-width:640px){h1{max-width:100%;flex-basis:100%}#size{display:none}}
+</style>
+</head>
+<body>
+<header id="bar"></header>
+<main id="main"></main>
+<div class="toast" id="toast" role="status"></div>
+<script>
+(function () {
+  'use strict';
+
+  var OWNER = 'ivankubove-maker';
+  var REPO = 'playable-previews';
+  var BRANCH = 'main';
+  var DIR = 'playables';
+
+  var DEVICES = [
+    { id: 'iphone15', label: 'iPhone 15 (393x852)', w: 393, h: 852 },
+    { id: 'iphonese', label: 'iPhone SE (375x667)', w: 375, h: 667 },
+    { id: 'pixel7', label: 'Pixel 7 (412x915)', w: 412, h: 915 },
+    { id: 'ipad', label: 'iPad (768x1024)', w: 768, h: 1024 },
+    { id: 'interstitial', label: 'Interstitial (320x480)', w: 320, h: 480 },
+    { id: 'fill', label: 'Fill window', w: 0, h: 0 }
+  ];
+
+  var bar = document.getElementById('bar');
+  var main = document.getElementById('main');
+  var params = new URLSearchParams(location.search);
+  var p = (params.get('p') || '').trim();
+
+  function el(tag, attrs) {
+    var e = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) {
+        var v = attrs[k];
+        if (k === 'text') e.textContent = v;
+        else if (k === 'class') e.className = v;
+        else if (k.indexOf('on') === 0) e.addEventListener(k.slice(2), v);
+        else e.setAttribute(k, v);
+      });
+    }
+    for (var i = 2; i < arguments.length; i++) {
+      var c = arguments[i];
+      if (c) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    }
+    return e;
+  }
+
+  function toast(text) {
+    var t = document.getElementById('toast');
+    t.textContent = text;
+    t.classList.add('show');
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(function () { t.classList.remove('show'); }, 1600);
+  }
+
+  function copy(text) {
+    function fallback() {
+      var ta = el('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); toast('Link copied'); } catch (e) { toast('Copy failed'); }
+      ta.remove();
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () { toast('Link copied'); }, fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  function baseUrl() {
+    return location.origin + location.pathname.replace(/index\.html$/, '');
+  }
+
+  function previewUrl(name) {
+    return baseUrl() + '?p=' + encodeURIComponent(name).replace(/%2F/g, '/');
+  }
+
+  // Maps ?p= to a file inside the playables folder.
+  //   name        -> playables/name.html
+  //   name.html   -> playables/name.html
+  //   folder/     -> playables/folder/index.html
+  function resolve(name) {
+    if (!/^[A-Za-z0-9._\-\/ ]+$/.test(name) || name.indexOf('..') !== -1 || name.charAt(0) === '/') return null;
+    if (/\/$/.test(name)) return DIR + '/' + name + 'index.html';
+    if (/\.html?$/i.test(name)) return DIR + '/' + name;
+    return DIR + '/' + name + '.html';
+  }
+
+  function prettyName(name) {
+    return name.replace(/\/$/, '').replace(/\.html?$/i, '').split('/').pop();
+  }
+
+  function message(title, html) {
+    main.innerHTML = '';
+    var box = el('div', { class: 'msg' }, el('h2', { text: title }));
+    var body = el('p');
+    body.innerHTML = html;
+    box.appendChild(body);
+    main.appendChild(box);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ---------- Preview mode ---------- */
+  function preview(name) {
+    var src = resolve(name);
+    var title = prettyName(name);
+    document.title = title + ' - Playable preview';
+    bar.appendChild(el('h1', { text: title, title: name }));
+
+    if (!src) {
+      message('Invalid playable name', 'Use letters, numbers, dashes, underscores, dots and slashes only.');
+      return;
+    }
+
+    var startDevice = params.get('d');
+    if (!DEVICES.some(function (d) { return d.id === startDevice; })) {
+      startDevice = window.innerWidth < 640 ? 'fill' : 'iphone15';
+    }
+    var state = { d: startDevice, landscape: params.get('o') === 'l' };
+
+    var sel = el('select', { 'aria-label': 'Device' });
+    DEVICES.forEach(function (d) { sel.appendChild(el('option', { value: d.id, text: d.label })); });
+    sel.value = state.d;
+    var rotate = el('button', { type: 'button', text: 'Rotate', title: 'Switch portrait / landscape' });
+    var restart = el('button', { type: 'button', text: 'Restart' });
+    var open = el('a', { class: 'btn', href: src, target: '_blank', rel: 'noopener', text: 'Full screen' });
+    // Single-file playables only; a folder playable cannot be downloaded as one file.
+    var download = /\/$/.test(name)
+      ? null
+      : el('a', { class: 'btn', href: src, download: src.split('/').pop(), text: 'Download' });
+    var share = el('button', { type: 'button', class: 'primary', text: 'Copy link' });
+    var size = el('span', { id: 'size' });
+
+    bar.appendChild(sel);
+    bar.appendChild(rotate);
+    bar.appendChild(restart);
+    bar.appendChild(open);
+    if (download) bar.appendChild(download);
+    bar.appendChild(share);
+    bar.appendChild(size);
+
+    var stage = el('div', { id: 'stage' });
+    var device = el('div', { id: 'device' });
+    var frame = el('iframe', {
+      id: 'frame',
+      title: title,
+      allow: 'autoplay; fullscreen; clipboard-write; accelerometer; gyroscope',
+      allowfullscreen: ''
+    });
+    device.appendChild(frame);
+    stage.appendChild(device);
+
+    function load() {
+      frame.src = src + '?t=' + Date.now();
+    }
+
+    function syncUrl() {
+      var q = new URLSearchParams(location.search);
+      q.set('p', name);
+      q.set('d', state.d);
+      if (state.landscape) q.set('o', 'l'); else q.delete('o');
+      history.replaceState(null, '', location.pathname + '?' + q.toString().replace(/%2F/g, '/'));
+    }
+
+    function layout() {
+      var d = DEVICES.filter(function (x) { return x.id === state.d; })[0] || DEVICES[0];
+      var sw = stage.clientWidth;
+      var sh = stage.clientHeight;
+      rotate.disabled = d.id === 'fill';
+      if (d.id === 'fill') {
+        device.className = 'fill';
+        device.style.width = sw + 'px';
+        device.style.height = sh + 'px';
+        device.style.transform = 'none';
+        size.textContent = sw + 'x' + sh;
+        return;
+      }
+      var w = state.landscape ? d.h : d.w;
+      var h = state.landscape ? d.w : d.h;
+      var pad = 56;
+      var s = Math.max(0.1, Math.min(1, (sw - pad) / w, (sh - pad) / h));
+      device.className = '';
+      device.style.width = w + 'px';
+      device.style.height = h + 'px';
+      device.style.transform = 'scale(' + s + ')';
+      size.textContent = w + 'x' + h + (s < 1 ? ' at ' + Math.round(s * 100) + '%' : '');
+    }
+
+    sel.addEventListener('change', function () { state.d = sel.value; syncUrl(); layout(); });
+    rotate.addEventListener('click', function () { state.landscape = !state.landscape; syncUrl(); layout(); });
+    restart.addEventListener('click', load);
+    share.addEventListener('click', function () { copy(location.href); });
+    window.addEventListener('resize', layout);
+
+    function mount() {
+      main.innerHTML = '';
+      main.appendChild(stage);
+      syncUrl();
+      layout();
+      load();
+    }
+
+    fetch(src, { method: 'HEAD', cache: 'no-store' })
+      .then(function (r) {
+        if (r.status === 404) {
+          [sel, rotate, restart, open, download, share, size].forEach(function (x) { if (x) x.remove(); });
+          message('Playable not found',
+            'No file at <code>' + escapeHtml(src) + '</code>. If it was uploaded in the last few minutes, ' +
+            'GitHub Pages may still be publishing it. Reload this page in a minute.');
+        } else {
+          mount();
+        }
+      })
+      .catch(mount);
+  }
+
+  /* ---------- List mode ---------- */
+  function list() {
+    document.title = 'Playable previews';
+    bar.appendChild(el('h1', { text: 'Playable previews' }));
+    bar.appendChild(el('a', {
+      class: 'btn primary',
+      href: 'https://github.com/' + OWNER + '/' + REPO + '/upload/' + BRANCH + '/' + DIR,
+      target: '_blank',
+      rel: 'noopener',
+      text: 'Upload playable'
+    }));
+
+    var wrap = el('div', { id: 'list' });
+    var grid = el('div', { class: 'grid' });
+    wrap.appendChild(grid);
+    main.appendChild(wrap);
+    grid.appendChild(el('p', { class: 'msg', text: 'Loading...' }));
+
+    fetch('https://api.github.com/repos/' + OWNER + '/' + REPO + '/contents/' + DIR + '?ref=' + BRANCH, {
+      headers: { Accept: 'application/vnd.github+json' },
+      cache: 'no-store'
+    })
+      .then(function (r) {
+        if (r.status === 404) return [];
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (items) {
+        grid.innerHTML = '';
+        var names = items
+          .filter(function (i) { return (i.type === 'file' && /\.html?$/i.test(i.name)) || i.type === 'dir'; })
+          .map(function (i) { return i.type === 'dir' ? i.name + '/' : i.name.replace(/\.html$/i, ''); })
+          .sort(function (a, b) { return a.localeCompare(b); });
+
+        if (!names.length) {
+          grid.appendChild(el('div', { class: 'msg' },
+            el('h2', { text: 'No playables yet' }),
+            el('p', { text: 'Upload an HTML file to the playables folder. Its preview link will appear here.' })));
+          return;
+        }
+        names.forEach(function (n) {
+          var url = previewUrl(n);
+          grid.appendChild(el('div', { class: 'row' },
+            el('span', { class: 'name', text: prettyName(n) }),
+            el('a', { class: 'btn', href: url, text: 'Preview' }),
+            el('button', { type: 'button', class: 'primary', text: 'Copy link', onclick: function () { copy(url); } })));
+        });
+      })
+      .catch(function () {
+        grid.innerHTML = '';
+        grid.appendChild(el('div', { class: 'msg' },
+          el('h2', { text: 'The list could not be loaded' }),
+          el('p', { text: 'Open a playable directly by adding ?p=<file name> to this address.' })));
+      });
+  }
+
+  if (p) preview(p); else list();
+})();
+</script>
+</body>
+</html>
