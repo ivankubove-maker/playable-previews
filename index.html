@@ -45,7 +45,7 @@ code{background:#1f232c;border:1px solid var(--line);border-radius:4px;padding:1
   var OWNER = 'ivankubove-maker';
   var REPO = 'playable-previews';
   var BRANCH = 'main';
-  var DIR = 'playables';
+  var DIR = 'PLAYABLES_Previews';
 
   var DEVICES = [
     { id: 'iphone15', label: 'iPhone 15 (393x852)', w: 393, h: 852 },
@@ -111,10 +111,10 @@ code{background:#1f232c;border:1px solid var(--line);border-radius:4px;padding:1
     return baseUrl() + '?p=' + encodeURIComponent(name).replace(/%2F/g, '/');
   }
 
-  // Maps ?p= to a file inside the playables folder.
-  //   name        -> playables/name.html
-  //   name.html   -> playables/name.html
-  //   folder/     -> playables/folder/index.html
+  // Maps ?p= to a file inside the DIR folder.
+  //   name        -> DIR/name.html
+  //   name.html   -> DIR/name.html
+  //   folder/     -> DIR/folder/index.html
   function resolve(name) {
     if (!/^[A-Za-z0-9._\-\/ ]+$/.test(name) || name.indexOf('..') !== -1 || name.charAt(0) === '/') return null;
     if (/\/$/.test(name)) return DIR + '/' + name + 'index.html';
@@ -292,7 +292,7 @@ code{background:#1f232c;border:1px solid var(--line);border-radius:4px;padding:1
         if (!names.length) {
           grid.appendChild(el('div', { class: 'msg' },
             el('h2', { text: 'No playables yet' }),
-            el('p', { text: 'Upload an HTML file to the playables folder. Its preview link will appear here.' })));
+            el('p', { text: 'Upload an HTML file to the PLAYABLES_Previews folder. Its preview link will appear here.' })));
           return;
         }
         names.forEach(function (n) {

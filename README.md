@@ -6,13 +6,13 @@ Preview links for HTML5 playable ads, served with GitHub Pages.
 
 ## Add a playable
 
-1. Open the [`playables`](playables) folder and choose **Add file → Upload files**.
-2. Drop in the playable HTML file, for example `hm-quackin-reels-8-click.html`, and commit.
+1. Open the [`PLAYABLES_Previews`](PLAYABLES_Previews) folder and choose **Add file → Upload files**.
+2. Drop in the playable HTML file, for example `HM_Quackin_Reels_8_Click_Moloco.html`, and commit.
 3. Wait about one minute for GitHub Pages to publish it.
 4. Share the preview link:
 
 ```
-https://ivankubove-maker.github.io/playable-previews/?p=hm-quackin-reels-8-click
+https://ivankubove-maker.github.io/playable-previews/?p=HM_Quackin_Reels_8_Click_Moloco
 ```
 
 To replace a playable, upload a file with the same name. The link stays the same.
@@ -26,7 +26,7 @@ To replace a playable, upload a file with the same name. The link stays the same
 
 ## Multi-file playables
 
-Upload the whole folder into `playables/` with an `index.html` inside, then link with a trailing slash:
+Upload the whole folder into `PLAYABLES_Previews/` with an `index.html` inside, then link with a trailing slash:
 `?p=folder-name/`
 
 ## Note
